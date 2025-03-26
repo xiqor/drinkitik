@@ -1,31 +1,27 @@
 from aiogram import Router, types
 from aiogram.filters import Command
-from botdir.parser import parse_chat
 from config.config import ALLOWED_CHATS
-from db import save_message
+from db import get_messages_after_last_recorded
+from botdir.process import process_messages
 
-router = Router()  # Используем Router вместо Dispatcher
+handlers_router = Router()  # Используем Router вместо Dispatcher
 
-@router.message()
-async def log_message(message: types.Message):
-    """Логирует все сообщения в БД"""
-    await save_message(
-        message_id=message.message_id,
-        chat_id=message.chat.id,
-        user_id=message.from_user.id,
-        text=message.text or "",
-        date=message.date.isoformat()
-    )
+@handlers_router.message(Command("parse"))
+async def parse_messages(message: types.Message):
+    chat_id = message.chat.id
+    messages = await get_messages_after_last_recorded(chat_id)
 
-@router.message(Command("parse"))
-async def parse_chat_command(message: types.Message):
-    chat_id = message.chat.id  # Получаем ID чата
-
-    # Проверяем, разрешен ли этот чат
     if chat_id not in ALLOWED_CHATS:
         await message.answer("❌ Этот чат не в списке разрешенных!")
         return
 
-    # Запускаем парсинг
-    messages = await parse_chat(chat_id)
-    await message.answer(f"✅ Найдено {messages} сообщений после 'УЧТЕНО'.")
+    if not messages:
+        await message.answer("❌ Не найдено сообщений после последнего 'СПИСАНО'.")
+        return
+
+    print("✅ Хендлер /parse вызван!")  # Отладка
+    await message.answer("Парсинг начался...")
+    # Тут ты добавишь свою логику обработки сообщений
+    result = process_messages(messages)
+
+    await message.answer(f"✅ Обработано {len(messages)} сообщений.\nРезультат: {result}")
